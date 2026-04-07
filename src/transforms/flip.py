@@ -4,10 +4,11 @@
       cchess_reg/datasets/transforms/cchess_half_flip.py
 
 关键设计:
-- 水平翻转: 只翻转列顺序
-- 垂直翻转: 翻转行顺序 + 交换红黑棋子颜色（旧版未做，业务需要）
-- 对角翻转: 水平 + 垂直
-- 半棋盘镜像: 不交换颜色（合成数据增强）
+- 翻转只改变棋子的空间位置，不改变棋子类别（K 永远是红王，k 永远是黑王）
+- 水平翻转: 翻转列顺序
+- 垂直翻转: 翻转行顺序
+- 对角翻转: 水平 + 垂直（180° 旋转）
+- 半棋盘镜像: 一侧镜像到另一侧（合成数据增强）
 """
 
 import random
@@ -17,23 +18,14 @@ import torch
 from PIL import Image
 from torch import Tensor
 
-# 红黑棋子颜色交换映射: 红方 index ↔ 黑方 index
-# . → ., x → x, K↔k, A↔a, B↔b, N↔n, R↔r, C↔c, P↔p
-RED_BLACK_SWAP = torch.tensor(
-    [0, 1, 9, 10, 11, 12, 13, 14, 15, 2, 3, 4, 5, 6, 7, 8],
-    dtype=torch.long,
-)
-
 VALID_DIRECTIONS = {"horizontal", "vertical", "diagonal"}
 
 
 class CChessRandomFlip:
     """棋盘随机翻转（至多执行一个方向，避免多个翻转互相抵消）。
 
-    忠实复现旧版 CChessRandomFlip，但垂直翻转增加红黑交换。
-
-    旧版 prob=[0.2, 0.2, 0.2] 对应每个方向的独立概率。
-    旧版垂直翻转不做颜色交换，但业务上需要（棋盘可能从任一方拍摄）。
+    忠实复现旧版 CChessRandomFlip：翻转只改变棋子空间位置，不改变类别。
+    翻转后 label 中的棋子类 index 不变——K 仍然是红王，k 仍然是黑王。
 
     执行逻辑：按顺序检查每个方向的概率，第一个命中的方向被执行后立即返回。
     这保证至多一个方向生效，避免 horizontal+vertical+diagonal 三者同时触发
@@ -70,13 +62,11 @@ class CChessRandomFlip:
         elif direction == "vertical":
             image = image.transpose(Image.FLIP_TOP_BOTTOM)
             label = label.flip(0)
-            label = RED_BLACK_SWAP[label]
         elif direction == "diagonal":
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
             image = image.transpose(Image.FLIP_TOP_BOTTOM)
             label = label.flip(1)
             label = label.flip(0)
-            label = RED_BLACK_SWAP[label]
         return image, label
 
 
@@ -87,8 +77,8 @@ class CChessHalfFlip:
     - 水平模式：以 cell_w * 4 或 cell_w * 5 为界，左右半边互镜像
     - 垂直模式：以 h // 2 为界，上下半边互镜像
 
-    注意：半棋盘镜像不交换红黑颜色（与全板翻转不同）。
-    这是合成数据增强，目的是增加多样性而非模拟真实视角。
+    翻转只改变棋子空间位置，不改变类别。
+    这是合成数据增强，目的是增加多样性。
 
     Args:
         mode: 'horizontal' 或 'vertical'

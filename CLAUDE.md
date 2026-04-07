@@ -44,7 +44,7 @@ uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/s
 - `src/evaluate.py` — CChessEvaluator（class AP, position AP, mAP, full accuracy, errK, P/R/F1, piece_only_mAP）
 - `src/transforms/` — 棋盘感知数据增强模块
   - `pipeline.py` — train_transform / val_transform 预定义管线
-  - `flip.py` — CChessRandomFlip（水平/垂直/对角，垂直翻转自动交换红黑颜色）, CChessHalfFlip
+  - `flip.py` — CChessRandomFlip（水平/垂直/对角，只改变空间位置不改变类别）, CChessHalfFlip
   - `mixup.py` — CChessMixSinglePngCls（从 PNG 资源在空位粘贴棋子，使用 flat index 定位 cell）
   - `perspective.py` — RandomPerspective（cv2 优先，PIL 回退）
   - `copy_half.py` — CChessCachedCopyHalf（缓存式半板复制）
@@ -57,6 +57,6 @@ uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/s
 ## Data Augmentation
 
 train_transform 管线顺序（忠实复现旧版 cchess_reg）：
-1. Resize → 2. PiecePaste（--png_dir 指定 PNG 目录）→ 3. CachedCopyHalf → 4. HorizontalHalfFlip → 5. VerticalHalfFlip → 6. RandomFlip（水平/垂直/对角）→ 7. GaussianBlur → 8. ColorJitter → 9. RandomErasing×2 → 10. RandomPerspective → 11. ToTensorNormalize
+1. Resize → 2. PiecePaste（--png_dir 指定 PNG 目录）→ 3. CachedCopyHalf → 4. RandomFlip（水平/垂直/对角，至多执行一个方向）→ 5. HorizontalHalfFlip → 6. VerticalHalfFlip → 7. GaussianBlur → 8. ColorJitter → 9. RandomErasing×2 → 10. RandomPerspective → 11. ToTensorNormalize
 
-垂直翻转会自动交换红黑棋子颜色（K↔k, A↔a, ...），半板镜像不交换（纯合成增强）。
+所有翻转只改变棋子的空间位置，不改变类别（K 永远是红王，k 永远是黑王）。
