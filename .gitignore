@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 .DS_Store
+.claude/
 CChessNet.mlpackage/
 datasets
 docs/superpowers/
+.agents/
+.trae
+skills/

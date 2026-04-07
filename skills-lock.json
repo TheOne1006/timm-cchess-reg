@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "huggingface-community-evals": {
+      "source": "huggingface/skills",
+      "sourceType": "github",
+      "computedHash": "32eec43c4c176086132aefee5377b47e98095727289f128492da697dccbc1598"
+    },
+    "huggingface-datasets": {
+      "source": "huggingface/skills",
+      "sourceType": "github",
+      "computedHash": "79398ce664a1554bd55582cfa933ca0e6732840c5e2e00afe0132c44e22ee767"
+    },
+    "huggingface-vision-trainer": {
+      "source": "huggingface/skills",
+      "sourceType": "github",
+      "computedHash": "bf5eff3c692372a798f1763f975ed2725794a55af4f0ba4de58492e7d83b8d75"
+    }
+  }
+}
