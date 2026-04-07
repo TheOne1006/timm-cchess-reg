@@ -1,7 +1,7 @@
 """Mock 推理演示：验证 CChessNet 管线连通性。"""
 
 import torch
-from model import CChessNet
+from src.model import CChessNet
 
 # 16 类标签映射
 CLASS_NAMES = [

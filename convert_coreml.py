@@ -4,16 +4,13 @@
 转换完成后可用 Xcode 打开 .mlpackage 查看模型结构。
 """
 
-import sys
 from pathlib import Path
 
 import coremltools as ct
 import numpy as np
 import torch
 
-# 将 src/ 加入 import 路径
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-from model import CChessNet
+from src.model import CChessNet
 
 INPUT_HEIGHT = CChessNet.INPUT_HEIGHT
 INPUT_WIDTH = CChessNet.INPUT_WIDTH
