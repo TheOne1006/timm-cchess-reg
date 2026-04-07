@@ -4,23 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-中国象棋棋盘识别项目——全卷积网格预测 (Fully Convolutional Grid Prediction)。输入棋盘图像，输出 10x9x16 分类矩阵（90 个棋位，每位置 16 类）。目标部署平台为 iOS CoreML + ANE。
+中国象棋棋盘识别——全卷积网格预测 (Fully Convolutional Grid Prediction)。输入棋盘图像，输出 10x9x16 分类矩阵（90 个棋位，每位置 16 类）。目标部署平台为 iOS CoreML + Apple Neural Engine (ANE)。
 
-参考项目: `/Users/theone/theone/Programme/my-apps/cchess-apps/chinese-chess-recognition/cchess_reg`（基于 SwinV2 + MMPretrain，本项目的上一代实现）。
+使用 timm ConvNeXt Atto 替代上一代 SwinV2 + MMPretrain 方案（参考 `/Users/theone/theone/Programme/my-apps/cchess-apps/chinese-chess-recognition/cchess_reg`）。
 
 ## Commands
 
 ```bash
-# 环境管理（使用 uv，保证纯净）
+# 环境管理（使用 uv）
 uv sync                              # 安装依赖
 uv run python src/model.py           # 验证模型构建 + 前向传播
 uv run python src/inference.py       # Mock 推理演示（需 cd src/）
 uv run python convert_coreml.py      # CoreML 转换（macOS only）
+
+# 训练
+uv run python -m src.train --data_dir datasets/demo --epochs 100 --batch_size 8
+uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/single_cls2_png --fp16
 ```
 
 ## Architecture
 
-**数据流：** `[B,3,640,576]` → ConvNeXt Atto backbone → `[B,320,20,18]` → stride-2 conv → `[B,128,10,9]` → dilated context module → 3-layer classifier (128→64→32→16) → softmax → `[B,10,9,16]`
+**数据流：** `[B,3,640,576]` → ConvNeXt Atto backbone → `[B,320,20,18]` → stride-2 conv → `[B,128,10,9]` → dilated context module → 3-layer classifier (128→64→32→16) → `[B,16,10,9]`
 
 **关键设计约束（CoreML/ANE）：**
 - 所有通道数必须是 32 的倍数
@@ -30,16 +34,29 @@ uv run python convert_coreml.py      # CoreML 转换（macOS only）
 
 **16 类标签：** `.`, `x`, K, A, B, N, R, C, P, k, a, b, n, r, c, p
 
-## File Layout
+**训练流程：** 使用 HuggingFace Trainer。模型 `forward()` 在提供 labels 时返回 `{"loss": ..., "logits": ...}`，无 labels 时返回 softmax 概率。DataLoader 通过 `_HFDatasetWrapper` 包装后传入 Trainer，再用 monkey-patch 替换 Trainer 默认的 DataLoader 以保留自定义 `collate_fn`。
 
-- `src/model.py` — CChessNet 模型定义（ContextModule + CChessNet）
-- `src/inference.py` — Mock 推理演示
-- `convert_coreml.py` — 独立的 CoreML 转换脚本（不依赖 inference.py）
-- `gemini_doc.md` — 架构设计参考文档
-- `datasets/demo/` — 示例图片 (.jpg) + 标签 (.txt，FEN 格式 10 行 x 9 列)
+## Key Files
 
-## Training Plan
+- `src/model.py` — CChessNet（ContextModule + 下采样 + 3层1x1分类头），backbone 通道数从 `self.backbone.num_features` 动态获取，常量从 `dataset.py` 导入
+- `src/dataset.py` — CChessDataset + FEN parser，定义所有常量（NUM_CLASSES=16, IMG_HEIGHT=640, IMG_WIDTH=576 等）
+- `src/train.py` — HF Trainer 训练入口，SubsetWithTransform 支持 train/val 分别叠加不同 transform
+- `src/evaluate.py` — CChessEvaluator（class AP, position AP, mAP, full accuracy, errK, P/R/F1, piece_only_mAP）
+- `src/transforms/` — 棋盘感知数据增强模块
+  - `pipeline.py` — train_transform / val_transform 预定义管线
+  - `flip.py` — CChessRandomFlip（水平/垂直/对角，垂直翻转自动交换红黑颜色）, CChessHalfFlip
+  - `mixup.py` — CChessMixSinglePngCls（从 PNG 资源在空位粘贴棋子，使用 flat index 定位 cell）
+  - `perspective.py` — RandomPerspective（cv2 优先，PIL 回退）
+  - `copy_half.py` — CChessCachedCopyHalf（缓存式半板复制）
+  - `augment.py` — ColorJitter, GaussianBlur（functional API）, RandomErasing
+  - `base.py` — Compose, Resize, ToTensorNormalize
+- `convert_coreml.py` — 独立 CoreML 转换脚本（torch.jit.trace → coremltools）
+- `datasets/demo/` — 示例 .jpg + .txt（FEN 格式 10行x9列）
+- `datasets/single_cls2_png/` — 棋子 PNG 图片（用于 PiecePaste 增强）
 
-后续将使用 **HuggingFace Trainer** 进行训练（非 MMPretrain 或自定义训练循环）。添加训练代码时注意：
-- 使用 HuggingFace `transformers` / `datasets` 生态
-- 模型需要兼容 `Trainer` API（实现 `forward` 返回 loss 或封装为 HF 模型类）
+## Data Augmentation
+
+train_transform 管线顺序（忠实复现旧版 cchess_reg）：
+1. Resize → 2. PiecePaste（--png_dir 指定 PNG 目录）→ 3. CachedCopyHalf → 4. HorizontalHalfFlip → 5. VerticalHalfFlip → 6. RandomFlip（水平/垂直/对角）→ 7. GaussianBlur → 8. ColorJitter → 9. RandomErasing×2 → 10. RandomPerspective → 11. ToTensorNormalize
+
+垂直翻转会自动交换红黑棋子颜色（K↔k, A↔a, ...），半板镜像不交换（纯合成增强）。

@@ -1,6 +1,11 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import timm
+
+from .dataset import NUM_CLASSES, IMG_HEIGHT, IMG_WIDTH
 
 
 class ContextModule(nn.Module):
@@ -31,11 +36,10 @@ class CChessNet(nn.Module):
     管线：ConvNeXt Atto → stride-2 conv → context module → 1x1 classifier
     """
 
-    # 16 类：空白、其他、红方7子、黑方7子
-    NUM_CLASSES = 16
-    # 输入尺寸：高 640，宽 576
-    INPUT_HEIGHT = 640
-    INPUT_WIDTH = 576
+    # 常量从 dataset.py 导入，保持单一数据源
+    NUM_CLASSES = NUM_CLASSES
+    INPUT_HEIGHT = IMG_HEIGHT
+    INPUT_WIDTH = IMG_WIDTH
 
     def __init__(self, backbone_name: str = "convnext_atto.d2_in1k"):
         super().__init__()
@@ -43,8 +47,8 @@ class CChessNet(nn.Module):
         self.backbone = timm.create_model(
             backbone_name, pretrained=True, num_classes=0
         )
-        # backbone 输出通道数：ConvNeXt Atto 最终 stage 输出 320 通道
-        backbone_channels = 320
+        # backbone 输出通道数：从模型动态获取
+        backbone_channels = self.backbone.num_features
         # 中间通道数：128（32 的倍数，满足 ANE 对齐要求）
         mid_channels = 128
 
@@ -69,16 +73,25 @@ class CChessNet(nn.Module):
             nn.Conv2d(32, self.NUM_CLASSES, 1),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, labels: Optional[torch.Tensor] = None):
         # x: [B, 3, 640, 576]
         features = self.backbone.forward_features(x)  # [B, 320, 20, 18]
+        # backbone 输出可能非连续，MPS 后向需要 contiguous
+        features = features.contiguous()
         x = self.downsample(features)  # [B, 128, 10, 9]
         x = self.context(x)  # [B, 128, 10, 9]
-        x = self.classifier(x)  # [B, 16, 10, 9]
-        # 转为 [B, 10, 9, 16] 并 softmax
-        x = x.permute(0, 2, 3, 1)  # [B, 10, 9, 16]
-        x = torch.softmax(x, dim=-1)
-        return x
+        logits = self.classifier(x)  # [B, 16, 10, 9]
+
+        if labels is not None:
+            # CrossEntropyLoss expects [B, C, H, W] logits and [B, H, W] labels
+            loss = F.cross_entropy(logits, labels)
+            # detach logits for evaluation metrics (no grad needed)
+            logits_out = logits.detach().permute(0, 2, 3, 1).contiguous()
+            return {"loss": loss, "logits": logits_out}
+
+        # 推理模式：返回 softmax 概率
+        logits = logits.permute(0, 2, 3, 1)  # [B, 10, 9, 16]
+        return torch.softmax(logits, dim=-1)
 
 
 if __name__ == "__main__":
