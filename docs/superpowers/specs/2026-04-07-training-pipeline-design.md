@@ -216,9 +216,28 @@ TrainingArguments(
 - 设备通用：代码需在 CPU / CUDA / MPS 上运行
 - Colab 友好：依赖用 pip install 可装
 
+### 6. HuggingFace Hub 上传
+
+训练完成后支持上传模型到 HF Hub。由于不是标准 `PreTrainedModel`，使用手动上传方案：
+
+```python
+# 训练完成后保存最佳模型
+trainer.save_model("./best_model")
+
+# 上传到 HF Hub
+from huggingface_hub import HfApi
+api = HfApi()
+api.upload_folder(
+    folder_path="./best_model",
+    repo_id="your-username/cchess-reg",
+    repo_type="model",
+)
+```
+
+`TrainingArguments` 可配置 `push_to_hub=True`，但需配合自定义 `save_pretrained` 方法。
+
 ## Out of Scope
 
-- HF Hub 模型推送
 - 分布式训练
 - Hyperparameter search
 - RandAugment（用 ColorJitter + GaussianBlur 替代）
