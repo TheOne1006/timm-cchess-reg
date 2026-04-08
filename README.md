@@ -66,7 +66,7 @@ uv sync
 
 ```bash
 # 使用 demo 数据训练 100 个 epoch
-uv run python -m src.train --data_dir datasets/demo --epochs 100 --batch_size 8
+uv run python -m src.train --data_dir datasets/full --epochs 100 --batch_size 8
 
 # 使用完整数据集，启用 FP16 和棋子粘贴增强
 uv run python -m src.train \

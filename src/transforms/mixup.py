@@ -27,10 +27,14 @@ from ..dataset import IMG_HEIGHT, IMG_WIDTH
 
 @dataclass
 class PieceCacheItem:
-    """棋子 PNG 缓存项。"""
-    img_rgb: np.ndarray  # (H, W, 3) uint8
-    mask: np.ndarray     # (H, W) uint8, alpha channel
-    label: int           # class index (0-15)
+    """棋子 PNG 缓存项（多尺度预缓存）。"""
+    # scales: { (w, h): (img_rgb, mask) } — 预 resize 到的离散尺度
+    scales: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]]
+    label: int  # class index (0-15)
+
+
+# 预缓存尺度因子：覆盖 cell_scale [1.0, 1.5] 范围
+_CACHE_SCALES = [1.0, 1.0625, 1.125, 1.1875, 1.25, 1.3125, 1.375, 1.4375, 1.5]
 
 
 class CChessMixSinglePngCls:
@@ -95,10 +99,13 @@ class CChessMixSinglePngCls:
         self._load_png_resources(png_dir)
 
     def _load_png_resources(self, png_dir: str):
-        """加载所有类别目录下的 PNG 图片。"""
+        """加载所有类别目录下的 PNG 图片，预 resize 到多个离散尺度。"""
         png_path = Path(png_dir)
         if not png_path.exists():
             return
+
+        base_w = int(self.item_cell_width)
+        base_h = int(self.item_cell_height)
 
         for cate_name, label_idx in self.CATE_TO_LABEL.items():
             if cate_name in ("point", "other"):
@@ -111,11 +118,18 @@ class CChessMixSinglePngCls:
                 img_np = np.array(img)
                 if img_np.shape[2] != 4:
                     continue
-                self.cache_items.append(PieceCacheItem(
-                    img_rgb=img_np[:, :, :3].copy(),
-                    mask=img_np[:, :, 3].copy(),
-                    label=label_idx,
-                ))
+                raw_rgb = img_np[:, :, :3]
+                raw_mask = img_np[:, :, 3]
+
+                # 预 resize 到每个离散尺度
+                scales = {}
+                for s in _CACHE_SCALES:
+                    sw, sh = int(base_w * s), int(base_h * s)
+                    scales[(sw, sh)] = (
+                        np.array(Image.fromarray(raw_rgb).resize((sw, sh), Image.BILINEAR)),
+                        np.array(Image.fromarray(raw_mask).resize((sw, sh), Image.BILINEAR)),
+                    )
+                self.cache_items.append(PieceCacheItem(scales=scales, label=label_idx))
 
     def _get_cell_xy(self, cell_index: int) -> np.ndarray:
         """flat index (0-89) → (x, y) 像素坐标。"""
@@ -126,27 +140,22 @@ class CChessMixSinglePngCls:
     def _paste_cell_img(self, cell_index: int, img: np.ndarray, cache_item: PieceCacheItem):
         """在指定 cell 位置粘贴一个棋子。
 
-        忠实复现旧版 paste_cell_img：
-        - 随机缩放 cell_scale
-        - 随机旋转 rotate_angle
-        - 随机上下/左右翻转
-        - 越界自动裁剪
-        - alpha mask 混合
+        使用预缓存的多尺度图片，运行时无需 PIL resize。
         """
         x, y = self._get_cell_xy(cell_index)
-        w = self.item_cell_width
-        h = self.item_cell_height
 
-        # 随机缩放
+        # 随机选尺度
         cell_scale = random.uniform(self.cell_scale[0], self.cell_scale[1])
-        w = w * cell_scale
-        h = h * cell_scale
+        target_w = int(self.item_cell_width * cell_scale)
+        target_h = int(self.item_cell_height * cell_scale)
 
-        x, y, w, h = int(x), int(y), int(w), int(h)
+        # 选最近的预缓存尺寸
+        best_size = min(cache_item.scales.keys(),
+                        key=lambda s: abs(s[0] - target_w) + abs(s[1] - target_h))
+        cell_img, mask = cache_item.scales[best_size]
+        w, h = best_size
 
-        # resize 棋子到目标尺寸
-        cell_img = np.array(Image.fromarray(cache_item.img_rgb).resize((w, h), Image.BILINEAR))
-        mask = np.array(Image.fromarray(cache_item.mask).resize((w, h), Image.BILINEAR))
+        x, y = int(x), int(y)
 
         # 随机旋转
         if self.rotate_angle[0] != 0 or self.rotate_angle[1] != 0:
@@ -180,7 +189,7 @@ class CChessMixSinglePngCls:
         try:
             img[y:y + h, x:x + w] = cell_img * mask_binary + origin_img_part * (1 - mask_binary)
         except ValueError:
-            logger.debug("Piece paste dimension mismatch at cell %d, skipping", cell_idx)
+            logger.debug("Piece paste dimension mismatch at cell %d, skipping", cell_index)
 
     def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
         if random.random() >= self.prob:
