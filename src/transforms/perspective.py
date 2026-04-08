@@ -41,7 +41,7 @@ class RandomPerspective:
         except ImportError:
             return False
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+    def __call__(self, image, label: Tensor):
         if random.random() >= self.prob:
             return image, label
 
@@ -70,10 +70,14 @@ class RandomPerspective:
              oy + sh + random.uniform(-scale * h, scale * h)],
         ], dtype=np.float32)
 
-    def _warp_cv2(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+    def _warp_cv2(self, image, label: Tensor) -> tuple[np.ndarray, Tensor]:
         import cv2
 
-        img = np.array(image)
+        if isinstance(image, Image.Image):
+            img = np.array(image)
+        else:
+            img = image
+
         h, w = img.shape[:2]
 
         scale = np.random.uniform(self.scale_range[0], self.scale_range[1])
@@ -84,23 +88,28 @@ class RandomPerspective:
 
         M = cv2.getPerspectiveTransform(pts1, pts2)
         img_warped = cv2.warpPerspective(img, M, (w, h))
-        return Image.fromarray(img_warped), label
+        return img_warped, label
 
-    def _warp_pil(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
-        w, h = image.size
+    def _warp_pil(self, image, label: Tensor) -> tuple[np.ndarray, Tensor]:
+        if isinstance(image, np.ndarray):
+            pil_img = Image.fromarray(image)
+        else:
+            pil_img = image
+
+        w, h = pil_img.size
         scale = random.uniform(*self.scale_range)
         size_scale = random.uniform(*self.size_scale_range)
 
         src_pts = [(0, 0), (w, 0), (0, h), (w, h)]
         dst_pts = self._generate_dst_corners(w, h, scale, size_scale)
-        dst_pts = [tuple(pt) for pt in dst_pts]  # convert to list of tuples for PIL
+        dst_pts = [tuple(pt) for pt in dst_pts]
 
         try:
             coeffs = self._find_perspective_coeffs(src_pts, dst_pts)
-            image = image.transform((w, h), Image.PERSPECTIVE, coeffs, Image.BILINEAR)
+            pil_img = pil_img.transform((w, h), Image.PERSPECTIVE, coeffs, Image.BILINEAR)
         except np.linalg.LinAlgError:
-            pass  # 退化透视变换（目标点共线等），跳过
-        return image, label
+            pass
+        return np.array(pil_img), label
 
     @staticmethod
     def _find_perspective_coeffs(

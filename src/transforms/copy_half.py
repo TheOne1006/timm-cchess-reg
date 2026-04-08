@@ -33,8 +33,12 @@ class CChessCachedCopyHalf:
         self.prob = prob
         self._cache: list[dict] = []
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
-        img_np = np.array(image)
+    def __call__(self, image, label: Tensor):
+        if isinstance(image, Image.Image):
+            img_np = np.array(image)
+        else:
+            img_np = image.copy()
+
         label_np = label.numpy().copy()
 
         # 当前样本存入缓存（使用原始数据的拷贝）
@@ -62,7 +66,6 @@ class CChessCachedCopyHalf:
                 label_flat[HALF_BOARD_SIZE:] = cache_item["label"].flatten()[HALF_BOARD_SIZE:]
                 label_np = label_flat.reshape(10, 9)
 
-            image = Image.fromarray(img_np)
             label = torch.from_numpy(label_np)
 
         # 维护缓存
@@ -70,4 +73,4 @@ class CChessCachedCopyHalf:
             self._cache.pop(random.randint(0, len(self._cache) - 1))
         self._cache.append(cache_entry)
 
-        return image, label
+        return img_np, label
