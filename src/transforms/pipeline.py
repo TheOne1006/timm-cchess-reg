@@ -39,7 +39,7 @@ def train_transform(
     """
     transforms_list = [
         CenterCrop(),  # 裁掉原图 padding，与老项目 CenterCrop(400,450) 一致
-        Resize(IMG_HEIGHT, IMG_WIDTH),
+        Resize(height=IMG_HEIGHT, width=IMG_WIDTH),
     ]
 
     # 棋子粘贴
@@ -92,6 +92,6 @@ def val_transform() -> Compose:
     """验证/测试集 transform pipeline。"""
     return Compose([
         CenterCrop(),  # 裁掉原图 padding，与老项目 CenterCrop(400,450) 一致
-        Resize(IMG_HEIGHT, IMG_WIDTH),
+        Resize(height=IMG_HEIGHT, width=IMG_WIDTH),
         ToTensorNormalize(),
     ])

@@ -45,7 +45,6 @@ def draw_board_overlay(image: Image.Image, label: torch.Tensor) -> Image.Image:
             "Arial.ttf",
             "/Library/Fonts/Arial.ttf",
             "/System/Library/Fonts/Supplemental/Arial.ttf",
-            "C:\\Windows\\Fonts\\arial.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         ]
         font = ImageFont.load_default()
