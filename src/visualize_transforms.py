@@ -96,10 +96,13 @@ def capture_stages(transform, image: Image.Image, label: torch.Tensor):
     for i, t in enumerate(transform.transforms):
         name = type(t).__name__
         if isinstance(t, ToTensorNormalize):
-            stages.append((f"{i}: {name} (skipped)", current_img, current_label))
+            vis_img = Image.fromarray(current_img) if isinstance(current_img, np.ndarray) else current_img
+            stages.append((f"{i}: {name} (skipped)", vis_img, current_label))
             continue
         current_img, current_label = t(current_img, current_label)
-        stages.append((f"{i}: {name}", current_img, current_label))
+        # 存可视化用副本：numpy→PIL 转换，但不修改 current_img 原始类型
+        vis_img = Image.fromarray(current_img) if isinstance(current_img, np.ndarray) else current_img
+        stages.append((f"{i}: {name}", vis_img, current_label))
 
     return stages
 
