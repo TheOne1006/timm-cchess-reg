@@ -71,11 +71,15 @@ class RandomErasing:
         self.min_area_ratio = min_area_ratio
         self.max_area_ratio = max_area_ratio
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+    def __call__(self, image, label: Tensor):
         if random.random() >= self.prob:
             return image, label
 
-        img = np.array(image)
+        if isinstance(image, Image.Image):
+            img = np.array(image)
+        else:
+            img = image.copy()
+
         h, w = img.shape[:2]
         area = h * w
         erase_area = area * random.uniform(self.min_area_ratio, self.max_area_ratio)
@@ -88,4 +92,4 @@ class RandomErasing:
             0, 256, (erase_h, erase_w, 3), dtype=np.uint8,
         )
 
-        return Image.fromarray(img), label
+        return img, label
