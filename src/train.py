@@ -68,26 +68,32 @@ class CChessTrainer(Trainer):
 
     def get_train_dataloader(self):
         from torch.utils.data import DataLoader, RandomSampler
+        nw = self.args.dataloader_num_workers
         return DataLoader(
             self.train_dataset,
             batch_size=self.args.train_batch_size,
             sampler=RandomSampler(self.train_dataset),
             collate_fn=self.data_collator,
             drop_last=True,
-            num_workers=self.args.dataloader_num_workers,
+            num_workers=nw,
             pin_memory=self.args.dataloader_pin_memory,
+            persistent_workers=nw > 0,
+            prefetch_factor=4 if nw > 0 else None,
         )
 
     def get_eval_dataloader(self, eval_dataset=None):
         from torch.utils.data import DataLoader, SequentialSampler
         dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
+        nw = self.args.dataloader_num_workers
         return DataLoader(
             dataset,
             batch_size=self.args.eval_batch_size,
             sampler=SequentialSampler(dataset),
             collate_fn=self.data_collator,
-            num_workers=self.args.dataloader_num_workers,
+            num_workers=nw,
             pin_memory=self.args.dataloader_pin_memory,
+            persistent_workers=nw > 0,
+            prefetch_factor=4 if nw > 0 else None,
         )
 
 
@@ -192,7 +198,7 @@ def main():
     parser.add_argument("--warmup_ratio", type=float, default=0.1, help="warmup 比例")
     parser.add_argument("--scheduler", type=str, default="cosine", help="学习率调度器")
     parser.add_argument("--fp16", action="store_true", help="启用 FP16 混合精度")
-    parser.add_argument("--num_workers", type=int, default=2, help="DataLoader workers")
+    parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
 
     # 增强
     parser.add_argument("--perspective_prob", type=float, default=0.7, help="透视变换概率")
