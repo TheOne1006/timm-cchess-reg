@@ -26,8 +26,10 @@ from .transforms.pipeline import train_transform
 from .transforms.base import ToTensorNormalize
 
 
-def draw_board_overlay(image: Image.Image, label: torch.Tensor) -> Image.Image:
+def draw_board_overlay(image, label: torch.Tensor) -> Image.Image:
     """在图像上叠加棋盘网格线和棋子标注。"""
+    if isinstance(image, np.ndarray):
+        image = Image.fromarray(image)
     img = image.copy()
     draw = ImageDraw.Draw(img)
     w, h = img.size
