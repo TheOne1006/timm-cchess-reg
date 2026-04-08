@@ -191,20 +191,24 @@ class CChessMixSinglePngCls:
         except ValueError:
             logger.debug("Piece paste dimension mismatch at cell %d, skipping", cell_index)
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+    def __call__(self, image, label: Tensor):
         if random.random() >= self.prob:
             return image, label
         if not self.cache_items:
             return image, label
 
-        img = np.array(image)
+        if isinstance(image, Image.Image):
+            img = np.array(image)
+        else:
+            img = image.copy()
+
         label_np = label.numpy().copy()
         label_flat = label_np.flatten()
 
         # 找空位 (class index == 0, 即 point ".")
         empty_indices = [i for i, v in enumerate(label_flat) if v == 0]
         if not empty_indices:
-            return image, label
+            return img, torch.from_numpy(label_np)
 
         # 随机粘贴数量
         cover_num = random.randint(
@@ -222,6 +226,5 @@ class CChessMixSinglePngCls:
             label_flat[cell_idx] = piece.label
 
         label_np = label_flat.reshape(10, 9)
-        image = Image.fromarray(img)
         label = torch.from_numpy(label_np)
-        return image, label
+        return img, label
