@@ -90,11 +90,15 @@ class CChessHalfFlip:
         self.mode = mode
         self.prob = prob
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+    def __call__(self, image, label: Tensor):
         if random.random() >= self.prob:
             return image, label
 
-        img = np.array(image)
+        if isinstance(image, Image.Image):
+            img = np.array(image)
+        else:
+            img = image.copy()
+
         h, w = img.shape[:2]
         label_np = label.numpy().copy()
 
@@ -129,6 +133,5 @@ class CChessHalfFlip:
                 img[:source_mid_h, :] = flip_half_img
                 label_np[:5, :] = np.flipud(label_np[5:, :])
 
-        image = Image.fromarray(img)
         label = torch.from_numpy(label_np)
-        return image, label
+        return img, label
