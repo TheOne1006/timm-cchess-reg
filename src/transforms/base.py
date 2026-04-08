@@ -1,10 +1,10 @@
-"""基础 Transform: Compose, Resize, ToTensorNormalize。"""
+"""基础 Transform: Compose, CenterCrop, Resize, ToTensorNormalize。"""
 
 import torchvision.transforms.functional as F_tv
 from PIL import Image
 from torch import Tensor
 
-from ..dataset import IMG_HEIGHT, IMG_WIDTH
+from ..dataset import CROP_HEIGHT, CROP_WIDTH, IMG_HEIGHT, IMG_WIDTH
 
 # ImageNet 标准化参数 (timm convnext 默认)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -20,6 +20,35 @@ class Compose:
     def __call__(self, image: Image.Image, label: Tensor) -> tuple[Tensor, Tensor]:
         for t in self.transforms:
             image, label = t(image, label)
+        return image, label
+
+
+class CenterCrop:
+    """从图像中心裁剪到指定尺寸，与 mmcv.transforms.CenterCrop 行为一致。
+
+    裁掉原图 padding 区域（老项目原图 450×500 含 50px padding），
+    CenterCrop(400, 450) 后得到 400×450 的纯净棋盘区域。
+
+    Args:
+        crop_width: 裁剪后宽度
+        crop_height: 裁剪后高度
+    """
+
+    def __init__(self, crop_width: int = CROP_WIDTH, crop_height: int = CROP_HEIGHT):
+        self.crop_size = (crop_width, crop_height)
+
+    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+        w, h = image.size
+        crop_w, crop_h = self.crop_size
+
+        # 如果图像已经小于等于裁剪尺寸，不裁剪
+        if w <= crop_w and h <= crop_h:
+            return image, label
+
+        x1 = max(0, (w - crop_w) // 2)
+        y1 = max(0, (h - crop_h) // 2)
+
+        image = image.crop((x1, y1, x1 + crop_w, y1 + crop_h))
         return image, label
 
 

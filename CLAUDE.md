@@ -39,11 +39,11 @@ uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/s
 ## Key Files
 
 - `src/model.py` — CChessNet（ContextModule + 下采样 + 3层1x1分类头），backbone 通道数从 `self.backbone.num_features` 动态获取，常量从 `dataset.py` 导入
-- `src/dataset.py` — CChessDataset + FEN parser，定义所有常量（NUM_CLASSES=16, IMG_HEIGHT=640, IMG_WIDTH=576 等）
+- `src/dataset.py` — CChessDataset + FEN parser，定义所有常量（NUM_CLASSES=16, IMG_HEIGHT=640, IMG_WIDTH=576, CROP_WIDTH=400, CROP_HEIGHT=450 等）
 - `src/train.py` — HF Trainer 训练入口，SubsetWithTransform 支持 train/val 分别叠加不同 transform
 - `src/evaluate.py` — CChessEvaluator（class AP, position AP, mAP, full accuracy, errK, P/R/F1, piece_only_mAP）
 - `src/transforms/` — 棋盘感知数据增强模块
-  - `pipeline.py` — train_transform / val_transform 预定义管线
+  - `pipeline.py` — train_transform / val_transform 预定义管线（CenterCrop → Resize → 增强 → Normalize）
   - `flip.py` — CChessRandomFlip（水平/垂直/对角，只改变空间位置不改变类别）, CChessHalfFlip
   - `mixup.py` — CChessMixSinglePngCls（从 PNG 资源在空位粘贴棋子，使用 flat index 定位 cell）
   - `perspective.py` — RandomPerspective（cv2 优先，PIL 回退）
@@ -57,6 +57,9 @@ uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/s
 ## Data Augmentation
 
 train_transform 管线顺序（忠实复现旧版 cchess_reg）：
-1. Resize → 2. PiecePaste（--png_dir 指定 PNG 目录）→ 3. CachedCopyHalf → 4. RandomFlip（水平/垂直/对角，至多执行一个方向）→ 5. HorizontalHalfFlip → 6. VerticalHalfFlip → 7. GaussianBlur → 8. ColorJitter → 9. RandomErasing×2 → 10. RandomPerspective → 11. ToTensorNormalize
+1. CenterCrop(400, 450)（裁掉原图 padding，与老项目 mmcv CenterCrop 一致）→ 2. Resize(640, 576) → 3. PiecePaste（--png_dir 指定 PNG 目录）→ 4. CachedCopyHalf → 5. RandomFlip（水平/垂直/对角，至多执行一个方向）→ 6. HorizontalHalfFlip → 7. VerticalHalfFlip → 8. GaussianBlur → 9. ColorJitter → 10. RandomErasing×2 → 11. RandomPerspective → 12. ToTensorNormalize
 
 所有翻转只改变棋子的空间位置，不改变类别（K 永远是红王，k 永远是黑王）。
+
+## Recent Changes
+- 002-fix-mixup-coords: Added CenterCrop(400,450) before Resize to remove original image padding, matching old project preprocessing pipeline

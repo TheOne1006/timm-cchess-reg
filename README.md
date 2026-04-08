@@ -58,6 +58,7 @@ cd timm-cchess-reg
 
 # 安装依赖
 uv sync
+
 ```
 
 ## 使用

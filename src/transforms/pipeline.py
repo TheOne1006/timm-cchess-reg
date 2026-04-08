@@ -7,7 +7,7 @@ import os
 from typing import Optional
 
 from .augment import ColorJitter, GaussianBlur, RandomErasing
-from .base import Compose, Resize, ToTensorNormalize
+from .base import CenterCrop, Compose, Resize, ToTensorNormalize
 from .copy_half import CChessCachedCopyHalf
 from .flip import CChessHalfFlip, CChessRandomFlip
 from .mixup import CChessMixSinglePngCls
@@ -38,6 +38,7 @@ def train_transform(
     11. ToTensorNormalize
     """
     transforms_list = [
+        CenterCrop(),  # 裁掉原图 padding，与老项目 CenterCrop(400,450) 一致
         Resize(IMG_HEIGHT, IMG_WIDTH),
     ]
 
@@ -90,6 +91,7 @@ def train_transform(
 def val_transform() -> Compose:
     """验证/测试集 transform pipeline。"""
     return Compose([
+        CenterCrop(),  # 裁掉原图 padding，与老项目 CenterCrop(400,450) 一致
         Resize(IMG_HEIGHT, IMG_WIDTH),
         ToTensorNormalize(),
     ])

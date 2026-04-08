@@ -26,6 +26,14 @@ BOARD_COLS = 9
 IMG_HEIGHT = 640
 IMG_WIDTH = 576
 
+# 原始数据集图像尺寸 (含 padding)，与老项目一致
+RAW_IMG_WIDTH = 450
+RAW_IMG_HEIGHT = 500
+
+# CenterCrop 裁剪尺寸，移除 padding 区域 (与老项目 CenterCrop(400,450) 一致)
+CROP_WIDTH = 400
+CROP_HEIGHT = 450
+
 
 def parse_fen_label(text: str) -> torch.Tensor:
     """解析 FEN 文本为 (10, 9) int tensor。
