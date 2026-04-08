@@ -1,6 +1,6 @@
 """中国象棋棋盘感知的数据增强 Transform。"""
 
-from .base import Compose, Resize, ToTensorNormalize, IMAGENET_MEAN, IMAGENET_STD
+from .base import Compose, Resize, ToTensorNormalize, PILToNumpy, NumpyToPIL, IMAGENET_MEAN, IMAGENET_STD
 from .flip import CChessRandomFlip, CChessHalfFlip
 from .copy_half import CChessCachedCopyHalf
 from .perspective import RandomPerspective
@@ -9,7 +9,7 @@ from .augment import ColorJitter, GaussianBlur, RandomErasing
 from .pipeline import train_transform, val_transform
 
 __all__ = [
-    "Compose", "Resize", "ToTensorNormalize",
+    "Compose", "Resize", "ToTensorNormalize", "PILToNumpy", "NumpyToPIL",
     "CChessRandomFlip", "CChessHalfFlip",
     "CChessCachedCopyHalf",
     "RandomPerspective",

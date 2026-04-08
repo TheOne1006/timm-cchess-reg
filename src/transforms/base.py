@@ -1,5 +1,6 @@
 """基础 Transform: Compose, CenterCrop, Resize, ToTensorNormalize。"""
 
+import numpy as np
 import torchvision.transforms.functional as F_tv
 from PIL import Image
 from torch import Tensor
@@ -70,3 +71,17 @@ class ToTensorNormalize:
         tensor = F_tv.to_tensor(image)  # [3, H, W], float32, [0,1]
         tensor = F_tv.normalize(tensor, IMAGENET_MEAN, IMAGENET_STD)
         return tensor, label
+
+
+class PILToNumpy:
+    """PIL Image → numpy array。用于在 pipeline 中显式控制类型边界。"""
+
+    def __call__(self, image: Image.Image, label: Tensor) -> tuple[np.ndarray, Tensor]:
+        return np.array(image), label
+
+
+class NumpyToPIL:
+    """numpy array → PIL Image。用于在 pipeline 中显式控制类型边界。"""
+
+    def __call__(self, image: np.ndarray, label: Tensor) -> tuple[Image.Image, Tensor]:
+        return Image.fromarray(image), label
