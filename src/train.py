@@ -174,7 +174,10 @@ def train(args):
         compute_metrics=compute_cchess_metrics,
     )
 
-    trainer.train()
+    if args.resume_from:
+        trainer.train(resume_from_checkpoint=args.resume_from)
+    else:
+        trainer.train()
     trainer.save_model(os.path.join(args.output_dir, "best_model"))
 
 
@@ -204,6 +207,9 @@ def main():
     parser.add_argument("--perspective_prob", type=float, default=0.7, help="透视变换概率")
     parser.add_argument("--piece_paste_prob", type=float, default=0.7, help="棋子粘贴概率")
     parser.add_argument("--piece_max_cells", type=int, default=15, help="最大粘贴棋子数")
+
+    # 恢复
+    parser.add_argument("--resume_from", type=str, default=None, help="恢复训练的 checkpoint 路径")
 
     # 输出
     parser.add_argument("--output_dir", type=str, default="outputs", help="输出目录")
