@@ -47,7 +47,7 @@ class CChessRandomFlip:
         self.prob = list(prob)
         self.direction = list(direction)
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+    def __call__(self, image, label: Tensor):
         for p, d in zip(self.prob, self.direction):
             if random.random() < p:
                 image, label = self._flip(image, label, d)
@@ -55,16 +55,15 @@ class CChessRandomFlip:
         return image, label
 
     @staticmethod
-    def _flip(image: Image.Image, label: Tensor, direction: str):
+    def _flip(image: np.ndarray, label: Tensor, direction: str):
         if direction == "horizontal":
-            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+            image = np.fliplr(image).copy()
             label = label.flip(1)
         elif direction == "vertical":
-            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            image = np.flipud(image).copy()
             label = label.flip(0)
         elif direction == "diagonal":
-            image = image.transpose(Image.FLIP_LEFT_RIGHT)
-            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            image = np.flipud(np.fliplr(image)).copy()
             label = label.flip(1)
             label = label.flip(0)
         return image, label

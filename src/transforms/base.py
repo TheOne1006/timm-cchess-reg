@@ -1,6 +1,7 @@
 """基础 Transform: Compose, CenterCrop, Resize, ToTensorNormalize。"""
 
 import numpy as np
+import torch
 import torchvision.transforms.functional as F_tv
 from PIL import Image
 from torch import Tensor
@@ -65,10 +66,14 @@ class Resize:
 
 
 class ToTensorNormalize:
-    """PIL Image → Tensor + ImageNet normalize。"""
+    """PIL Image 或 numpy array → Tensor + ImageNet normalize。"""
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Tensor, Tensor]:
-        tensor = F_tv.to_tensor(image)  # [3, H, W], float32, [0,1]
+    def __call__(self, image, label: Tensor) -> tuple[Tensor, Tensor]:
+        if isinstance(image, np.ndarray):
+            # numpy HWC uint8 → CHW float32 [0,1]
+            tensor = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
+        else:
+            tensor = F_tv.to_tensor(image)  # [3, H, W], float32, [0,1]
         tensor = F_tv.normalize(tensor, IMAGENET_MEAN, IMAGENET_STD)
         return tensor, label
 

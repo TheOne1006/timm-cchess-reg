@@ -36,7 +36,7 @@ def train_transform(
         PILToNumpy(),
     ]
 
-    # --- numpy block 1: 棋子粘贴 + 半板复制 ---
+    # --- numpy block 1: 棋子粘贴 + 半板复制 + 翻转 ---
     if png_dir and os.path.exists(png_dir):
         transforms_list.append(CChessMixSinglePngCls(
             png_dir=png_dir,
@@ -46,34 +46,26 @@ def train_transform(
         ))
 
     transforms_list.append(CChessCachedCopyHalf(cache_size=100, prob=0.3))
-
-    # --- BARRIER: numpy → PIL (RandomFlip 使用 Image.transpose) ---
-    transforms_list.append(NumpyToPIL())
-
-    # --- PIL block: 随机翻转 ---
     transforms_list.append(CChessRandomFlip(
         prob=[0.2, 0.2, 0.2],
         direction=["horizontal", "vertical", "diagonal"],
     ))
 
-    # --- BARRIER: PIL → numpy ---
-    transforms_list.append(PILToNumpy())
-
     # --- numpy block 2: 半板镜像 ---
     transforms_list.append(CChessHalfFlip(mode="horizontal", prob=0.5))
     transforms_list.append(CChessHalfFlip(mode="vertical", prob=0.5))
 
-    # --- BARRIER: numpy → PIL (GaussianBlur + ColorJitter 使用 torchvision PIL API) ---
+    # --- BARRIER: numpy → PIL (ColorJitter 使用 torchvision PIL API) ---
     transforms_list.append(NumpyToPIL())
 
-    # --- PIL block: 模糊 + 颜色 ---
-    transforms_list.append(GaussianBlur(kernel_size=5, sigma=(0.1, 1.2), prob=0.3))
+    # --- PIL block: 颜色 ---
     transforms_list.append(ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.12))
 
     # --- BARRIER: PIL → numpy ---
     transforms_list.append(PILToNumpy())
 
-    # --- numpy block 3: 擦除 + 透视 ---
+    # --- numpy block 3: 模糊 + 擦除 + 透视 ---
+    transforms_list.append(GaussianBlur(kernel_size=5, sigma=(0.1, 1.2), prob=0.3))
     transforms_list.append(RandomErasing(prob=0.5, min_area_ratio=0.0025, max_area_ratio=0.005))
     transforms_list.append(RandomErasing(prob=0.8, min_area_ratio=0.0025, max_area_ratio=0.005))
     transforms_list.append(RandomPerspective(
@@ -82,8 +74,6 @@ def train_transform(
         prob=perspective_prob,
     ))
 
-    # --- BARRIER: numpy → PIL (ToTensorNormalize 需要 PIL) ---
-    transforms_list.append(NumpyToPIL())
     transforms_list.append(ToTensorNormalize())
 
     return Compose(transforms_list)

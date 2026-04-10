@@ -35,7 +35,7 @@ class ColorJitter:
 
 
 class GaussianBlur:
-    """高斯模糊。"""
+    """高斯模糊（numpy/cv2 实现）。"""
 
     def __init__(
         self,
@@ -47,11 +47,12 @@ class GaussianBlur:
         self.sigma = sigma
         self.prob = prob
 
-    def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
+    def __call__(self, image, label: Tensor):
         if random.random() < self.prob:
-            from torchvision.transforms.functional import gaussian_blur
+            import cv2
             sigma = random.uniform(*self.sigma)
-            image = gaussian_blur(image, kernel_size=self.kernel_size, sigma=sigma)
+            ksize = self.kernel_size
+            image = cv2.GaussianBlur(image, (ksize, ksize), sigma)
         return image, label
 
 

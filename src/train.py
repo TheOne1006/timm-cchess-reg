@@ -77,8 +77,8 @@ class CChessTrainer(Trainer):
             drop_last=True,
             num_workers=nw,
             pin_memory=self.args.dataloader_pin_memory,
-            persistent_workers=nw > 0,
-            prefetch_factor=4 if nw > 0 else None,
+            persistent_workers=False,
+            prefetch_factor=2 if nw > 0 else None,
         )
 
     def get_eval_dataloader(self, eval_dataset=None):
@@ -92,8 +92,8 @@ class CChessTrainer(Trainer):
             collate_fn=self.data_collator,
             num_workers=nw,
             pin_memory=self.args.dataloader_pin_memory,
-            persistent_workers=nw > 0,
-            prefetch_factor=4 if nw > 0 else None,
+            persistent_workers=False,
+            prefetch_factor=2 if nw > 0 else None,
         )
 
 
