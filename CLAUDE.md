@@ -71,3 +71,10 @@ train_transform 管线顺序（忠实复现旧版 cchess_reg，含显式 PIL↔n
 4. **numpy block 2:** GaussianBlur → RandomErasing×2 → RandomPerspective → ToTensorNormalize
 
 所有翻转只改变棋子的空间位置，不改变类别（K 永远是红王，k 永远是黑王）。
+
+## Active Technologies
+- Python 3.11+ + PyTorch, coremltools, timm, torchvision, numpy, PIL, matplotlib, cv2 (003-model-verification)
+- N/A (verification only, no persistent storage) (003-model-verification)
+
+## Recent Changes
+- 003-model-verification: Added Python 3.11+ + PyTorch, coremltools, timm, torchvision, numpy, PIL, matplotlib, cv2

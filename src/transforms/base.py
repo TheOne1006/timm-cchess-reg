@@ -55,13 +55,35 @@ class CenterCrop:
 
 
 class Resize:
-    """Resize PIL Image 到固定尺寸。label 不变。"""
+    """等比缩放 PIL Image 并居中 padding 到固定尺寸，保持宽高比。label 不变。
+
+    先按 min(target_w/src_w, target_h/src_h) 等比缩放，
+    再居中 pad 不足的部分（黑色填充），返回精确 target_w × target_h。
+    """
 
     def __init__(self, height: int = IMG_HEIGHT, width: int = IMG_WIDTH):
-        self.size = (width, height)  # PIL resize 用 (w, h)
+        self.target_w = width
+        self.target_h = height
 
     def __call__(self, image: Image.Image, label: Tensor) -> tuple[Image.Image, Tensor]:
-        image = image.resize(self.size, Image.BILINEAR)
+        src_w, src_h = image.size  # PIL: (w, h)
+
+        # 等比缩放因子
+        scale = min(self.target_w / src_w, self.target_h / src_h)
+        new_w = round(src_w * scale)
+        new_h = round(src_h * scale)
+
+        image = image.resize((new_w, new_h), Image.BILINEAR)
+
+        # 居中 padding
+        pad_w = self.target_w - new_w
+        pad_h = self.target_h - new_h
+        if pad_w > 0 or pad_h > 0:
+            left = pad_w // 2
+            top = pad_h // 2
+            # PIL pad: (left, top, right, bottom)
+            image = F_tv.pad(image, [left, top, pad_w - left, pad_h - top], fill=0)
+
         return image, label
 
 

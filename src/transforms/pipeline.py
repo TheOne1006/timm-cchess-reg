@@ -1,6 +1,13 @@
 """预定义 Pipeline: train_transform, val_transform。
 
 顺序参考旧版 cchess_reg/configs/datasets/multi_label_dataset.py。
+
+关键设计：所有增强在原始棋盘坐标系下完成（CenterCrop 后 400×450），
+最后再 Resize 到模型输入尺寸 576×640。原因：
+- 原图 450×500 有 ~25px padding，4 个锚点定义棋盘边界
+- CenterCrop 移除 padding 得到纯净棋盘，锚点与图像四角对齐
+- PiecePaste 等基于 cell 位置的操作必须在正确坐标系下执行
+- 最后 Resize 仅影响模型输入尺寸，不影响增强正确性
 """
 
 import os
@@ -14,65 +21,66 @@ from .mixup import CChessMixSinglePngCls
 from .perspective import RandomPerspective
 from .randaugment import RandAugment
 
-from ..dataset import IMG_HEIGHT, IMG_WIDTH
+from ..dataset import IMG_HEIGHT, IMG_WIDTH, CROP_WIDTH, CROP_HEIGHT
 
 
 def train_transform(
     png_dir: Optional[str] = None,
-    perspective_prob: float = 0.7,
+    perspective_prob: float = 0.5,
     piece_paste_prob: float = 0.3,
     piece_max_cells: int = 15,
 ) -> Compose:
     """训练集 transform pipeline。
 
-    顺序与旧版完全一致。在 PIL/numpy 类型边界插入显式转换节点，
-    避免每个 transform 内部重复 PIL↔numpy 转换。
+    与旧版 cchess_reg 流程一致：
+    1. CenterCrop → 移除 padding，得到纯净 400×450 棋盘
+    2. PiecePaste → 在原始坐标系粘贴棋子（cell 位置精确）
+    3. Resize → 放大到模型输入 576×640
+    4. 其余增强 → 在 576×640 上执行
     """
     transforms_list = [
-        # --- PIL block: 空间变换 ---
+        # --- Step 1: 裁剪到纯净棋盘 (400×450) ---
         CenterCrop(),
-        Resize(height=IMG_HEIGHT, width=IMG_WIDTH),
 
-        # --- BARRIER: PIL → numpy ---
+        # --- Step 2: 棋子粘贴（在原始坐标系，cell 位置精确）---
         PILToNumpy(),
     ]
 
-    # --- numpy block 1: 棋子粘贴 + 半板复制 + 翻转 ---
     if png_dir and os.path.exists(png_dir):
         transforms_list.append(CChessMixSinglePngCls(
             png_dir=png_dir,
-            img_scale=(IMG_WIDTH, IMG_HEIGHT),
+            img_scale=(CROP_WIDTH, CROP_HEIGHT),
             max_mix_cells=piece_max_cells,
             prob=piece_paste_prob,
         ))
 
+    # --- Step 3: Resize 到模型输入 (576×640) ---
+    transforms_list.append(NumpyToPIL())
+    transforms_list.append(Resize(height=IMG_HEIGHT, width=IMG_WIDTH))
+
+    # --- Step 4: 空间增强 (576×640) ---
+    transforms_list.append(PILToNumpy())
     transforms_list.append(CChessCachedCopyHalf(cache_size=100, prob=0.3))
     transforms_list.append(CChessRandomFlip(
         prob=[0.2, 0.2, 0.2],
         direction=["horizontal", "vertical", "diagonal"],
     ))
-
-    # --- numpy block 2: 半板镜像 ---
     transforms_list.append(CChessHalfFlip(mode="horizontal", prob=0.5))
     transforms_list.append(CChessHalfFlip(mode="vertical", prob=0.5))
 
-    # --- BARRIER: numpy → PIL (ColorJitter 使用 torchvision PIL API) ---
+    # --- Step 5: 颜色增强 ---
     transforms_list.append(NumpyToPIL())
-
-    # --- PIL block: 颜色 ---
     transforms_list.append(ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.12))
 
-    # --- BARRIER: PIL → numpy ---
+    # --- Step 6: 其余增强 ---
     transforms_list.append(PILToNumpy())
-
-    # --- numpy block 3: RandAugment + 模糊 + 擦除 + 透视 ---
     transforms_list.append(RandAugment(num_policies=3, magnitude_level=5, total_level=10))
     transforms_list.append(GaussianBlur(kernel_size=5, sigma=(0.1, 1.2), prob=0.3))
     transforms_list.append(RandomErasing(prob=0.5, min_area_ratio=0.0025, max_area_ratio=0.005))
     transforms_list.append(RandomErasing(prob=0.8, min_area_ratio=0.0025, max_area_ratio=0.005))
     transforms_list.append(RandomPerspective(
-        scale=(0.05, 0.18),
-        size_scale=(0.7, 1.3),
+        scale=(0.02, 0.06),
+        size_scale=(0.9, 1.1),
         prob=perspective_prob,
     ))
 
@@ -84,7 +92,7 @@ def train_transform(
 def val_transform() -> Compose:
     """验证/测试集 transform pipeline。"""
     return Compose([
-        CenterCrop(),  # 裁掉原图 padding，与老项目 CenterCrop(400,450) 一致
+        CenterCrop(),
         Resize(height=IMG_HEIGHT, width=IMG_WIDTH),
         ToTensorNormalize(),
     ])

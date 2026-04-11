@@ -24,9 +24,9 @@ class RandomPerspective:
 
     def __init__(
         self,
-        scale: tuple[float, float] = (0.05, 0.18),
-        size_scale: tuple[float, float] = (0.7, 1.3),
-        prob: float = 0.7,
+        scale: tuple[float, float] = (0.02, 0.06),
+        size_scale: tuple[float, float] = (0.9, 1.1),
+        prob: float = 0.5,
     ):
         self.scale_range = scale
         self.size_scale_range = size_scale

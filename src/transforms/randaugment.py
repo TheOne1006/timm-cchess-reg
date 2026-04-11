@@ -85,8 +85,8 @@ def _adjust_sharpness(img: np.ndarray, magnitude: float) -> np.ndarray:
 
 
 def _rotate(img: np.ndarray, magnitude: float) -> np.ndarray:
-    """Rotate: 随机旋转。magnitude 映射到 angle=[0, 25]度。"""
-    angle = magnitude * 25.0
+    """Rotate: 随机旋转。magnitude 映射到 angle=[0, 15]度。"""
+    angle = magnitude * 15.0
     if random.random() < 0.5:
         angle = -angle
     h, w = img.shape[:2]
@@ -95,8 +95,8 @@ def _rotate(img: np.ndarray, magnitude: float) -> np.ndarray:
 
 
 def _shear_x(img: np.ndarray, magnitude: float) -> np.ndarray:
-    """Shear (horizontal): 水平剪切。magnitude 映射到 shear=[0, 0.3]。"""
-    shear = magnitude * 0.3
+    """Shear (horizontal): 水平剪切。magnitude 映射到 shear=[0, 0.1]。"""
+    shear = magnitude * 0.1
     if random.random() < 0.5:
         shear = -shear
     h, w = img.shape[:2]
@@ -105,8 +105,8 @@ def _shear_x(img: np.ndarray, magnitude: float) -> np.ndarray:
 
 
 def _shear_y(img: np.ndarray, magnitude: float) -> np.ndarray:
-    """Shear (vertical): 垂直剪切。magnitude 映射到 shear=[0, 0.3]。"""
-    shear = magnitude * 0.3
+    """Shear (vertical): 垂直剪切。magnitude 映射到 shear=[0, 0.1]。"""
+    shear = magnitude * 0.1
     if random.random() < 0.5:
         shear = -shear
     h, w = img.shape[:2]
