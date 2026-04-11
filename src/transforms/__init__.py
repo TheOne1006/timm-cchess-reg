@@ -6,6 +6,7 @@ from .copy_half import CChessCachedCopyHalf
 from .perspective import RandomPerspective
 from .mixup import CChessMixSinglePngCls
 from .augment import ColorJitter, GaussianBlur, RandomErasing
+from .randaugment import RandAugment
 from .pipeline import train_transform, val_transform
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "RandomPerspective",
     "CChessMixSinglePngCls",
     "ColorJitter", "GaussianBlur", "RandomErasing",
+    "RandAugment",
     "train_transform", "val_transform",
     "IMAGENET_MEAN", "IMAGENET_STD",
 ]

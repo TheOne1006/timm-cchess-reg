@@ -12,6 +12,7 @@ from .copy_half import CChessCachedCopyHalf
 from .flip import CChessHalfFlip, CChessRandomFlip
 from .mixup import CChessMixSinglePngCls
 from .perspective import RandomPerspective
+from .randaugment import RandAugment
 
 from ..dataset import IMG_HEIGHT, IMG_WIDTH
 
@@ -64,13 +65,14 @@ def train_transform(
     # --- BARRIER: PIL → numpy ---
     transforms_list.append(PILToNumpy())
 
-    # --- numpy block 3: 模糊 + 擦除 + 透视 ---
+    # --- numpy block 3: RandAugment + 模糊 + 擦除 + 透视 ---
+    transforms_list.append(RandAugment(num_policies=3, magnitude_level=5, total_level=10))
     transforms_list.append(GaussianBlur(kernel_size=5, sigma=(0.1, 1.2), prob=0.3))
     transforms_list.append(RandomErasing(prob=0.5, min_area_ratio=0.0025, max_area_ratio=0.005))
     transforms_list.append(RandomErasing(prob=0.8, min_area_ratio=0.0025, max_area_ratio=0.005))
     transforms_list.append(RandomPerspective(
-        scale=(0.05, 0.12),
-        size_scale=(0.8, 1.2),
+        scale=(0.05, 0.18),
+        size_scale=(0.7, 1.3),
         prob=perspective_prob,
     ))
 

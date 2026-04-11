@@ -196,7 +196,7 @@ def main():
     # 训练
     parser.add_argument("--epochs", type=int, default=100, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=8, help="batch size")
-    parser.add_argument("--lr", type=float, default=1e-3, help="学习率")
+    parser.add_argument("--lr", type=float, default=2e-4, help="学习率")
     parser.add_argument("--weight_decay", type=float, default=0.05, help="权重衰减")
     parser.add_argument("--warmup_ratio", type=float, default=0.1, help="warmup 比例")
     parser.add_argument("--scheduler", type=str, default="cosine", help="学习率调度器")

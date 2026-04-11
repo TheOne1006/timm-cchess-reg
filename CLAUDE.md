@@ -20,6 +20,12 @@ uv run python convert_coreml.py      # CoreML 转换（macOS only）
 # 训练
 uv run python -m src.train --data_dir datasets/demo --epochs 100 --batch_size 8
 uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/single_cls2_png --fp16
+
+# 恢复训练
+uv run python -m src.train --data_dir /path/to/dataset --resume_from outputs/checkpoint-XXX
+
+# 可视化 transform 效果
+uv run python -m src.visualize_transforms --image datasets/demo/xxx.jpg --png_dir datasets/single_cls2_png
 ```
 
 ## Architecture
@@ -34,7 +40,7 @@ uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/s
 
 **16 类标签：** `.`, `x`, K, A, B, N, R, C, P, k, a, b, n, r, c, p
 
-**训练流程：** 使用 HuggingFace Trainer。模型 `forward()` 在提供 labels 时返回 `{"loss": ..., "logits": ...}`，无 labels 时返回 softmax 概率。DataLoader 通过 `_HFDatasetWrapper` 包装后传入 Trainer，再用 monkey-patch 替换 Trainer 默认的 DataLoader 以保留自定义 `collate_fn`。
+**训练流程：** 使用 HuggingFace Trainer。模型 `forward()` 在提供 labels 时返回 `{"loss": ..., "logits": ...}`，无 labels 时返回 softmax 概率。DataLoader 通过 `CChessTrainer`（继承 Trainer）直接控制 DataLoader 创建，保留自定义 `collate_fn` 和 `drop_last`。支持 `--resume_from` 从 checkpoint 恢复训练。
 
 ## Key Files
 
@@ -42,6 +48,7 @@ uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/s
 - `src/dataset.py` — CChessDataset + FEN parser，定义所有常量（NUM_CLASSES=16, IMG_HEIGHT=640, IMG_WIDTH=576, CROP_WIDTH=400, CROP_HEIGHT=450 等）
 - `src/train.py` — HF Trainer 训练入口，SubsetWithTransform 支持 train/val 分别叠加不同 transform
 - `src/evaluate.py` — CChessEvaluator（class AP, position AP, mAP, full accuracy, errK, P/R/F1, piece_only_mAP）
+- `src/visualize_transforms.py` — 可视化 transform 各阶段效果（调试增强管线）
 - `src/transforms/` — 棋盘感知数据增强模块
   - `pipeline.py` — train_transform / val_transform 预定义管线（CenterCrop → Resize → 增强 → Normalize）
   - `flip.py` — CChessRandomFlip（水平/垂直/对角，只改变空间位置不改变类别）, CChessHalfFlip
@@ -53,13 +60,14 @@ uv run python -m src.train --data_dir /path/to/full_dataset --png_dir datasets/s
 - `convert_coreml.py` — 独立 CoreML 转换脚本（torch.jit.trace → coremltools）
 - `datasets/demo/` — 示例 .jpg + .txt（FEN 格式 10行x9列）
 - `datasets/single_cls2_png/` — 棋子 PNG 图片（用于 PiecePaste 增强）
+- `colab/cchess_reg_training.ipynb` — Colab 训练 notebook（Drive 持久化 + checkpoint resume）
 
 ## Data Augmentation
 
-train_transform 管线顺序（忠实复现旧版 cchess_reg）：
-1. CenterCrop(400, 450)（裁掉原图 padding，与老项目 mmcv CenterCrop 一致）→ 2. Resize(640, 576) → 3. PiecePaste（--png_dir 指定 PNG 目录）→ 4. CachedCopyHalf → 5. RandomFlip（水平/垂直/对角，至多执行一个方向）→ 6. HorizontalHalfFlip → 7. VerticalHalfFlip → 8. GaussianBlur → 9. ColorJitter → 10. RandomErasing×2 → 11. RandomPerspective → 12. ToTensorNormalize
+train_transform 管线顺序（忠实复现旧版 cchess_reg，含显式 PIL↔numpy 转换屏障）：
+1. **PIL block:** CenterCrop → Resize(640, 576) → [PIL→numpy]
+2. **numpy block 1:** PiecePaste → CachedCopyHalf → RandomFlip → HorizontalHalfFlip → VerticalHalfFlip
+3. [numpy→PIL] → ColorJitter → [PIL→numpy]
+4. **numpy block 2:** GaussianBlur → RandomErasing×2 → RandomPerspective → ToTensorNormalize
 
 所有翻转只改变棋子的空间位置，不改变类别（K 永远是红王，k 永远是黑王）。
-
-## Recent Changes
-- 002-fix-mixup-coords: Added CenterCrop(400,450) before Resize to remove original image padding, matching old project preprocessing pipeline
