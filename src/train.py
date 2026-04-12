@@ -139,6 +139,8 @@ def train(args):
     steps_per_epoch = len(train_dataset) // args.batch_size
     eval_steps = steps_per_epoch * 2  # ~每 2 epoch 评估一次
 
+    warmup_steps = args.warmup_epochs * steps_per_epoch
+
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
@@ -146,7 +148,8 @@ def train(args):
         per_device_eval_batch_size=args.batch_size,
         learning_rate=args.lr,
         weight_decay=args.weight_decay,
-        warmup_steps=int(args.warmup_ratio * args.epochs * len(train_dataset) / args.batch_size),
+        adam_epsilon=args.eps,
+        warmup_steps=warmup_steps,
         lr_scheduler_type=args.scheduler,
         logging_steps=args.log_interval,
         eval_strategy="steps",
@@ -196,9 +199,10 @@ def main():
     # 训练
     parser.add_argument("--epochs", type=int, default=100, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=8, help="batch size")
-    parser.add_argument("--lr", type=float, default=2e-4, help="学习率")
+    parser.add_argument("--lr", type=float, default=1e-4, help="学习率")
     parser.add_argument("--weight_decay", type=float, default=0.05, help="权重衰减")
-    parser.add_argument("--warmup_ratio", type=float, default=0.1, help="warmup 比例")
+    parser.add_argument("--eps", type=float, default=1e-8, help="AdamW epsilon")
+    parser.add_argument("--warmup_epochs", type=int, default=10, help="warmup epoch 数")
     parser.add_argument("--scheduler", type=str, default="cosine", help="学习率调度器")
     parser.add_argument("--fp16", action="store_true", help="启用 FP16 混合精度")
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
