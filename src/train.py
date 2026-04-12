@@ -60,11 +60,52 @@ class HFModelWrapper(torch.nn.Module):
         return self.cchess(pixel_values, labels=labels)
 
 
-from transformers import Trainer
+from transformers import Trainer, TrainerCallback
+
+
+class BackboneUnfreezeCallback(TrainerCallback):
+    """在指定 step 解冻 backbone 参数。"""
+
+    def __init__(self, unfreeze_step: int):
+        self.unfreeze_step = unfreeze_step
+        self._unfrozen = False
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if self._unfrozen or state.global_step < self.unfreeze_step:
+            return
+        model = kwargs.get("model")
+        if model is None:
+            return
+        cchess = model.cchess if hasattr(model, "cchess") else model
+        for p in cchess.backbone.parameters():
+            p.requires_grad = True
+        self._unfrozen = True
+        print(f"\n[BackboneUnfreeze] Unfreezing backbone at step {state.global_step}")
 
 
 class CChessTrainer(Trainer):
-    """自定义 Trainer：直接控制 DataLoader 创建，保留 collate_fn 和 drop_last。"""
+    """自定义 Trainer：直接控制 DataLoader 创建，保留 collate_fn 和 drop_last，支持 discriminative LR。"""
+
+    def __init__(self, *args, backbone_lr_scale: float = 0.1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.backbone_lr_scale = backbone_lr_scale
+
+    def create_optimizer(self):
+        """使用 discriminative LR：backbone 用较低的 LR，新层用标准 LR。"""
+        import torch
+        cchess = self.model.cchess if hasattr(self.model, "cchess") else self.model
+        backbone_params = [p for n, p in cchess.named_parameters() if "backbone" in n]
+        new_params = [p for n, p in cchess.named_parameters() if "backbone" not in n]
+        optimizer_groups = [
+            {"params": backbone_params, "lr": self.args.learning_rate * self.backbone_lr_scale},
+            {"params": new_params, "lr": self.args.learning_rate},
+        ]
+        self.optimizer = torch.optim.AdamW(
+            optimizer_groups,
+            weight_decay=self.args.weight_decay,
+            eps=self.args.adam_epsilon,
+        )
+        return self.optimizer
 
     def get_train_dataloader(self):
         from torch.utils.data import DataLoader, RandomSampler
@@ -137,6 +178,18 @@ def train(args):
     hf_model = HFModelWrapper(model)
 
     steps_per_epoch = len(train_dataset) // args.batch_size
+
+    # Freeze backbone if progressive unfreezing is enabled
+    callbacks = []
+    if args.freeze_backbone_epochs > 0:
+        for p in model.backbone.parameters():
+            p.requires_grad = False
+        unfreeze_step = args.freeze_backbone_epochs * steps_per_epoch
+        callbacks.append(BackboneUnfreezeCallback(unfreeze_step))
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6
+        print(f"Backbone frozen for {args.freeze_backbone_epochs} epochs ({unfreeze_step} steps)")
+        print(f"Trainable params: {trainable:.2f}M (backbone excluded)")
+
     eval_steps = steps_per_epoch * 2  # ~每 2 epoch 评估一次
 
     warmup_steps = args.warmup_epochs * steps_per_epoch
@@ -175,6 +228,8 @@ def train(args):
         eval_dataset=val_dataset,
         data_collator=collate_fn,
         compute_metrics=compute_cchess_metrics,
+        callbacks=callbacks if callbacks else None,
+        backbone_lr_scale=args.backbone_lr_scale,
     )
 
     if args.resume_from:
@@ -194,7 +249,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
 
     # 模型
-    parser.add_argument("--backbone", type=str, default="convnext_atto.d2_in1k", help="timm backbone 名称")
+    parser.add_argument("--backbone", type=str, default="convnext_nano.in12k_ft_in1k", help="timm backbone 名称")
 
     # 训练
     parser.add_argument("--epochs", type=int, default=100, help="训练轮数")
@@ -204,6 +259,8 @@ def main():
     parser.add_argument("--eps", type=float, default=1e-8, help="AdamW epsilon")
     parser.add_argument("--warmup_epochs", type=int, default=10, help="warmup epoch 数")
     parser.add_argument("--scheduler", type=str, default="cosine", help="学习率调度器")
+    parser.add_argument("--freeze_backbone_epochs", type=int, default=15, help="冻结 backbone 的 epoch 数 (0=不冻结)")
+    parser.add_argument("--backbone_lr_scale", type=float, default=0.1, help="backbone LR = base_lr * scale")
     parser.add_argument("--fp16", action="store_true", help="启用 FP16 混合精度")
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
 
