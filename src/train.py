@@ -91,8 +91,11 @@ class CChessTrainer(Trainer):
         self.backbone_lr_scale = backbone_lr_scale
 
     def create_optimizer(self):
-        """使用 discriminative LR：backbone 用较低的 LR，新层用标准 LR。"""
-        import torch
+        """使用 discriminative LR：backbone 用较低的 LR，新层用标准 LR。
+
+        注意：backbone 参数始终包含在优化器中（即使冻结期间），
+        以确保解冻后能正常更新。冻结期间梯度为零，AdamW 不更新参数。
+        """
         cchess = self.model.cchess if hasattr(self.model, "cchess") else self.model
         backbone_params = [p for n, p in cchess.named_parameters() if "backbone" in n]
         new_params = [p for n, p in cchess.named_parameters() if "backbone" not in n]
