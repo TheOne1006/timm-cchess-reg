@@ -43,6 +43,47 @@ class ContextModule(nn.Module):
         return self.branch_a(x) + self.branch_b(x) + self.branch_c(x)
 
 
+class FPNNeck(nn.Module):
+    """多尺度特征金字塔 Neck，融合 Backbone 的 Stage 2 (空间细节) 和 Stage 3 (语义) 特征。
+
+    Path A: 深层语义特征 (640ch, 20x18) -> 1x1 reduce -> stride-2 downsample -> 128ch, 10x9
+    Path B: 浅层空间特征 (320ch, 40x36) -> 1x1 reduce -> stride-4 downsample -> 128ch, 10x9
+    Merge: element-wise Add -> 128ch, 10x9
+    """
+
+    def __init__(self, deep_channels: int, shallow_channels: int, mid_channels: int = 128):
+        super().__init__()
+        # Path A: deep semantic features -> 20x18 -> 10x9
+        self.reduce_deep = nn.Sequential(
+            nn.Conv2d(deep_channels, mid_channels, 1, bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+        )
+        self.downsample_deep = nn.Sequential(
+            nn.Conv2d(mid_channels, mid_channels, 3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+        )
+
+        # Path B: shallow spatial features -> 40x36 -> 10x9
+        self.reduce_shallow = nn.Sequential(
+            nn.Conv2d(shallow_channels, mid_channels, 1, bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+        )
+        self.downsample_shallow = nn.Sequential(
+            nn.Conv2d(mid_channels, mid_channels, 4, stride=4, padding=0, bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, features: list) -> torch.Tensor:
+        deep, shallow = features[1], features[0]  # stage3, stage2
+        x_deep = self.downsample_deep(self.reduce_deep(deep))          # [B, 128, 10, 9]
+        x_shallow = self.downsample_shallow(self.reduce_shallow(shallow))  # [B, 128, 10, 9]
+        return x_deep + x_shallow
+
+
 class ChannelAttention(nn.Module):
     """ANE 兼容的通道注意力模块（SE-style）。
 
@@ -66,7 +107,7 @@ class ChannelAttention(nn.Module):
 class CChessNet(nn.Module):
     """全卷积网格预测模型：输入棋盘图像，输出 10x9x16 分类矩阵。
 
-    管线：ConvNeXt Atto → stride-2 conv → channel attention → context module → 1x1 classifier
+    管线：ConvNeXt Nano (features_only) → FPN Neck → channel attention → context module → 1x1 classifier
     """
 
     # 常量从 dataset.py 导入，保持单一数据源
@@ -74,23 +115,21 @@ class CChessNet(nn.Module):
     INPUT_HEIGHT = IMG_HEIGHT
     INPUT_WIDTH = IMG_WIDTH
 
-    def __init__(self, backbone_name: str = "convnext_atto.d2_in1k"):
+    def __init__(self, backbone_name: str = "convnext_nano.in12k_ft_in1k"):
         super().__init__()
-        # Backbone：移除分类头，仅保留特征提取
+        # Backbone：多阶段特征提取 (Stage 2 + Stage 3)
         self.backbone = timm.create_model(
-            backbone_name, pretrained=True, num_classes=0
+            backbone_name, pretrained=True,
+            features_only=True, out_indices=(2, 3),
         )
-        # backbone 输出通道数：从模型动态获取
-        backbone_channels = self.backbone.num_features
+        # 从 backbone feature_info 获取各阶段通道数
+        ch = self.backbone.feature_info.channels()
+        shallow_channels, deep_channels = ch[0], ch[1]
         # 中间通道数：128（32 的倍数，满足 ANE 对齐要求）
         mid_channels = 128
 
-        # 可学习的下采样：20x18 → 10x9
-        self.downsample = nn.Sequential(
-            nn.Conv2d(backbone_channels, mid_channels, 3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-        )
+        # 多尺度 FPN Neck：融合 Stage 2 (空间细节) + Stage 3 (语义)
+        self.fpn_neck = FPNNeck(deep_channels, shallow_channels, mid_channels)
 
         # 上下文融合
         self.register_buffer(
@@ -116,10 +155,8 @@ class CChessNet(nn.Module):
 
     def forward(self, x: torch.Tensor, labels: Optional[torch.Tensor] = None):
         # x: [B, 3, 640, 576]
-        features = self.backbone.forward_features(x)  # [B, 320, 20, 18]
-        # backbone 输出可能非连续，MPS 后向需要 contiguous
-        features = features.contiguous()
-        x = self.downsample(features)  # [B, mid_channels, 10, 9]
+        features = self.backbone(x)  # list: [stage2, stage3]
+        x = self.fpn_neck(features)  # [B, 128, 10, 9]
         x = self.channel_attn(x)  # channel attention
         x = self.context(x)  # context module
         logits = self.classifier(x)  # [B, 16, 10, 9]
