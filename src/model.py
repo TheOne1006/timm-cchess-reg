@@ -156,6 +156,8 @@ class CChessNet(nn.Module):
     def forward(self, x: torch.Tensor, labels: Optional[torch.Tensor] = None):
         # x: [B, 3, 640, 576]
         features = self.backbone(x)  # list: [stage2, stage3]
+        # backbone 输出可能非连续，MPS 后向需要 contiguous
+        features = [f.contiguous() for f in features]
         x = self.fpn_neck(features)  # [B, 128, 10, 9]
         x = self.channel_attn(x)  # channel attention
         x = self.context(x)  # context module
