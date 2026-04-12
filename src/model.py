@@ -115,7 +115,7 @@ class CChessNet(nn.Module):
     INPUT_HEIGHT = IMG_HEIGHT
     INPUT_WIDTH = IMG_WIDTH
 
-    def __init__(self, backbone_name: str = "convnext_nano.in12k_ft_in1k"):
+    def __init__(self, backbone_name: str = "convnext_atto.d2_in1k"):
         super().__init__()
         # Backbone：多阶段特征提取 (Stage 2 + Stage 3)
         self.backbone = timm.create_model(

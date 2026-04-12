@@ -257,7 +257,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
 
     # 模型
-    parser.add_argument("--backbone", type=str, default="convnext_nano.in12k_ft_in1k", help="timm backbone 名称")
+    parser.add_argument("--backbone", type=str, default="convnext_atto.d2_in1k", help="timm backbone 名称")
 
     # 训练
     parser.add_argument("--epochs", type=int, default=100, help="训练轮数")
