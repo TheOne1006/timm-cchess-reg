@@ -239,7 +239,12 @@ def train(args):
         trainer.train(resume_from_checkpoint=args.resume_from)
     else:
         trainer.train()
-    trainer.save_model(os.path.join(args.output_dir, "best_model"))
+
+    # 保存底层 CChessNet 的 state_dict（去除 HFModelWrapper 的 "cchess." 前缀）
+    best_dir = os.path.join(args.output_dir, "best_model")
+    os.makedirs(best_dir, exist_ok=True)
+    cchess = hf_model.cchess if hasattr(hf_model, "cchess") else hf_model
+    torch.save(cchess.state_dict(), os.path.join(best_dir, "pytorch_model.bin"))
 
 
 def main():
