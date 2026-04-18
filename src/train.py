@@ -52,6 +52,8 @@ class SubsetWithTransform(torch.utils.data.Subset):
 class HFModelWrapper(torch.nn.Module):
     """包装 CChessNet 使其兼容 HF Trainer。"""
 
+    _keys_to_ignore_on_save = None
+
     def __init__(self, cchess_model: CChessNet):
         super().__init__()
         self.cchess = cchess_model
