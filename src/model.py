@@ -139,12 +139,9 @@ class CChessNet(nn.Module):
         self.channel_attn = ChannelAttention(mid_channels)
         self.context = ContextModule(mid_channels)
 
-        # 分类头：逐层通道变换 128→128→64→32→16
+        # 分类头：逐层通道变换 128→64→32→16
         self.classifier = nn.Sequential(
-            nn.Conv2d(mid_channels, 128, 1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 64, 1, bias=False),
+            nn.Conv2d(mid_channels, 64, 1, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.Conv2d(64, 32, 1, bias=False),
